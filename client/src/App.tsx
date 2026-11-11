@@ -1,27 +1,116 @@
-import { useEffect, useState } from 'react';
+import { useRef } from 'react';
+import { useModbusConfig } from './hooks/useModbusConfig';
+import { denormalizeConfig } from './utils/configTransformer';
+import { ChannelSettingsModal } from './components/ChannelSettingsModal';
+import { DatapointsTable } from './components/DatapointsTable';
+import { Sidebar } from './components/Sidebar';
+import { Button } from './components/ui/Button';
 
 export function App() {
-  const [config, setConfig] = useState<unknown>(null);
-  const [error, setError] = useState<string | null>(null);
+  const {
+    state,
+    error,
+    isSaving,
+    selectedStationUid,
+    setSelectedStationUid,
+    editingChannelUid,
+    setEditingChannelUid,
+    updateChannel,
+    addDevice,
+    deleteDevice,
+    moveStations,
+    addRegister,
+    copyDatapointsToStation,
+    bulkUpdateDatapoints,
+    bulkDeleteDatapoints,
+    importJsonConfig,
+    saveConfig,
+  } = useModbusConfig();
 
-  useEffect(() => {
-    fetch('/api/config')
-      .then((res) => {
-        if (!res.ok) throw new Error(`HTTP error: ${res.status}`);
-        return res.json();
-      })
-      .then((data) => setConfig(data))
-      .catch((err: Error) => setError(err.message));
-  }, []);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  if (error) return <div style={{ padding: '20px', color: 'red' }}>Klaida: {error}</div>;
+  if (!state) return <div style={{ padding: '20px' }}>Kraunama konfigūracija...</div>;
+
+  const activeStation = selectedStationUid ? state.stations[selectedStationUid] || null : null;
+  const editingChannel = editingChannelUid ? state.channels[editingChannelUid] || null : null;
+
+  const handleExportJson = () => {
+    const raw = denormalizeConfig(state);
+    const blob = new Blob([JSON.stringify(raw, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'modbus_config_export.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const parsed = JSON.parse(event.target?.result as string);
+        importJsonConfig(parsed);
+      } catch {
+        alert('Netinkamas JSON failo formatas!');
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
 
   return (
-    <div style={{ padding: '20px', fontFamily: 'sans-serif' }}>
-      <h1>Modbus App</h1>
-      {error && <p style={{ color: 'red' }}>Klaida: {error}</p>}
-      {config ? (
-        <pre>{JSON.stringify(config, null, 2)}</pre>
-      ) : (
-        !error && <p>Kraunama konfigūracija...</p>
+    <div className="app-layout">
+      <header className="app-header">
+        <h2 style={{ margin: 0, fontSize: '16px' }}>Modbus Device Configurator</h2>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".json"
+            style={{ display: 'none' }}
+            onChange={handleImportFile}
+          />
+          <Button onClick={() => fileInputRef.current?.click()}>Import JSON</Button>
+          <Button onClick={handleExportJson}>Export JSON</Button>
+          <Button variant="success" onClick={saveConfig} disabled={isSaving}>
+            {isSaving ? 'Saugoma...' : 'Save Configuration'}
+          </Button>
+        </div>
+      </header>
+
+      <div className="app-body">
+        <Sidebar
+          channels={state.channels}
+          stations={state.stations}
+          selectedStationUid={selectedStationUid}
+          onSelectStation={setSelectedStationUid}
+          onEditChannel={setEditingChannelUid}
+          onAddDevice={addDevice}
+          onDeleteDevice={deleteDevice}
+          onMoveStations={moveStations}
+        />
+
+        <DatapointsTable
+          station={activeStation}
+          stations={state.stations}
+          datapoints={state.datapoints}
+          onAddRegister={addRegister}
+          onCopyDatapointsToStation={copyDatapointsToStation}
+          onBulkUpdateDatapoints={bulkUpdateDatapoints}
+          onBulkDeleteDatapoints={bulkDeleteDatapoints}
+        />
+      </div>
+
+      {editingChannel && (
+        <ChannelSettingsModal
+          channel={editingChannel}
+          onSave={updateChannel}
+          onClose={() => setEditingChannelUid(null)}
+        />
       )}
     </div>
   );
