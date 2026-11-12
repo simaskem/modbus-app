@@ -16,10 +16,45 @@ interface UPlotChartProps {
   timeRangeMinutes: number;
 }
 
+function buildAlignedData(
+  series: ChartSeriesConfig[],
+  history: Record<string, TimeSeriesPoint[]>
+): uPlot.AlignedData {
+  if (series.length === 0) return [Array.of<number>()];
+
+  const timestampSet = new Set<number>();
+  const seriesMaps = series.map((s) => {
+    const map = new Map<number, number>();
+    (history[s.uid] || []).forEach((pt) => {
+      const sec = Math.floor(pt.timestamp);
+      timestampSet.add(sec);
+      map.set(sec, pt.value);
+    });
+    return map;
+  });
+
+  const sortedTimestamps = Array.from(timestampSet).sort((a, b) => a - b);
+
+  // Jei yra tik 1 taškas, pridedame antrą tuščią laiko žymę (+1s),
+  // kad uPlot iškart nupieštų pirmąjį apskritimą nelaukdamas antro matavimo
+  if (sortedTimestamps.length === 1) {
+    const [firstTs] = sortedTimestamps;
+    sortedTimestamps.push(firstTs + 1);
+  }
+
+  return [
+    sortedTimestamps,
+    ...seriesMaps.map((map) => sortedTimestamps.map((ts) => map.get(ts) ?? null)),
+  ];
+}
+
 export function UPlotChart({ series, history, unitLabel, timeRangeMinutes }: UPlotChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const uplotRef = useRef<uPlot | null>(null);
   const rangeSecRef = useRef<number>(timeRangeMinutes * 60);
+  const historyRef = useRef(history);
+
+  historyRef.current = history;
 
   useEffect(() => {
     rangeSecRef.current = timeRangeMinutes * 60;
@@ -42,8 +77,9 @@ export function UPlotChart({ series, history, unitLabel, timeRangeMinutes }: UPl
         spanGaps: true,
         points: {
           show: () => true,
-          size: 7,
+          size: 8,
           fill: s.color,
+          stroke: s.color,
         },
         value: (_self: uPlot, rawVal: number | null) =>
           rawVal == null ? '--' : `${rawVal.toFixed(2)} ${unitLabel}`,
@@ -69,25 +105,21 @@ export function UPlotChart({ series, history, unitLabel, timeRangeMinutes }: UPl
             const nowSec = Math.floor(Date.now() / 1000);
 
             if (!isFinite(dataMin) || !isFinite(dataMax)) {
-              return [nowSec, nowSec + windowSec];
+              return [nowSec - 2, nowSec + windowSec];
             }
 
             if (dataMax - dataMin < windowSec) {
-              return [dataMin, dataMin + windowSec];
+              return [dataMin - 2, dataMin + windowSec];
             }
 
-            return [dataMax - windowSec, dataMax];
+            return [dataMax - windowSec, dataMax + 2];
           },
         },
       },
     };
 
-    const emptyData: uPlot.AlignedData = [
-      [],
-      ...series.map(() => []),
-    ];
-
-    uplotRef.current = new uPlot(opts, emptyData, containerRef.current);
+    const initialData = buildAlignedData(series, historyRef.current);
+    uplotRef.current = new uPlot(opts, initialData, containerRef.current);
 
     const handleResize = () => {
       if (containerRef.current && uplotRef.current) {
@@ -108,30 +140,7 @@ export function UPlotChart({ series, history, unitLabel, timeRangeMinutes }: UPl
 
   useEffect(() => {
     if (!uplotRef.current) return;
-
-    if (series.length === 0) {
-      uplotRef.current.setData([[]]);
-      return;
-    }
-
-    const timestampSet = new Set<number>();
-    const seriesMaps = series.map((s) => {
-      const map = new Map<number, number>();
-      (history[s.uid] || []).forEach((pt) => {
-        const sec = Math.floor(pt.timestamp);
-        timestampSet.add(sec);
-        map.set(sec, pt.value);
-      });
-      return map;
-    });
-
-    const sortedTimestamps = Array.from(timestampSet).sort((a, b) => a - b);
-    const alignedData: uPlot.AlignedData = [
-      sortedTimestamps,
-      ...seriesMaps.map((map) => sortedTimestamps.map((ts) => map.get(ts) ?? null)),
-    ];
-
-    uplotRef.current.setData(alignedData);
+    uplotRef.current.setData(buildAlignedData(series, history));
   }, [history, series, timeRangeMinutes]);
 
   return (
