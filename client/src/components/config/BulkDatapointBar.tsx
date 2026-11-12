@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { FlatStation } from '../types/modbus';
-import { Button } from './ui/Button';
+import { FlatStation } from '../../types/modbus';
+import { Button } from '../ui/Button';
 
 type EditableField = 'acq_cycle' | 'func_code' | 'byte_order';
 

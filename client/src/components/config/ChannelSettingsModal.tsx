@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { FlatChannel } from '../types/modbus';
-import { validateChannel } from '../utils/modbusValidator';
-import { Button } from './ui/Button';
+import { FlatChannel } from '../../types/modbus';
+import { validateChannel } from '../../utils/modbusValidator';
+import { Button } from '../ui/Button';
 
 interface ChannelSettingsModalProps {
   channel: FlatChannel;

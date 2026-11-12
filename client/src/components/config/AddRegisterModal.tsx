@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { FlatDatapoint, RawDatapoint } from '../types/modbus';
-import { getExpectedRegSize, validateDatapoint } from '../utils/modbusValidator';
-import { Button } from './ui/Button';
+import { FlatDatapoint, RawDatapoint } from '../../types/modbus';
+import { getExpectedRegSize, validateDatapoint } from '../../utils/modbusValidator';
+import { Button } from '../ui/Button';
 
 interface AddRegisterModalProps {
   existingDatapoints: FlatDatapoint[];

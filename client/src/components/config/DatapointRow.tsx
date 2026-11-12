@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { FlatDatapoint } from '../types/modbus';
+import { FlatDatapoint } from '../../types/modbus';
 
 interface DatapointRowProps {
   datapoint: FlatDatapoint;

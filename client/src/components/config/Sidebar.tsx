@@ -1,15 +1,15 @@
 import { useMemo, useState } from 'react';
-import { useSelection } from '../hooks/useSelection';
-import { FlatChannel, FlatStation, ProtocolType } from '../types/modbus';
 import { StationItem } from './StationItem';
-import { Badge } from './ui/Badge';
-import { Button } from './ui/Button';
+import { useSelection } from '../../hooks/useSelection';
+import { FlatChannel, FlatStation, ProtocolType } from '../../types/modbus';
+import { Badge } from '../ui/Badge';
+import { Button } from '../ui/Button';
 
 interface SidebarProps {
   channels: Record<string, FlatChannel>;
   stations: Record<string, FlatStation>;
   selectedStationUid: string | null;
-  onSelectStation: (stationUid: string) => void;
+  onSelectStation: (stationUid: string | null) => void;
   onEditChannel: (channelUid: string) => void;
   onAddDevice: (channelUid: string, name: string, stationAddr: string) => void;
   onDeleteDevice: (stationUid: string) => void;
@@ -47,6 +47,24 @@ export function Sidebar({
     return map;
   }, [stations]);
 
+  const handleProtocolChange = (proto: 'all' | ProtocolType) => {
+    setProtocolFilter(proto);
+
+    const visibleChannels = Object.values(channels).filter(
+      (ch) => proto === 'all' || ch.protocol === proto
+    );
+    const visibleChannelIds = new Set(visibleChannels.map((c) => c.uid));
+    const visibleStations = Object.values(stations).filter((st) =>
+      visibleChannelIds.has(st.channelUid)
+    );
+
+    const isCurrentStillVisible = visibleStations.some((st) => st.uid === selectedStationUid);
+    if (!isCurrentStillVisible) {
+      const [nextStation] = visibleStations;
+      onSelectStation(nextStation ? nextStation.uid : null);
+    }
+  };
+
   const handleBulkMove = () => {
     if (!targetChannel || selectedIds.size === 0) return;
     onMoveStations(Array.from(selectedIds), targetChannel);
@@ -70,7 +88,7 @@ export function Sidebar({
             key={proto}
             variant={protocolFilter === proto ? 'primary' : 'default'}
             style={{ flex: 1, textTransform: 'uppercase' }}
-            onClick={() => setProtocolFilter(proto)}
+            onClick={() => handleProtocolChange(proto)}
           >
             {proto}
           </Button>

@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { FlatStation } from '../types/modbus';
+import { FlatStation } from '../../types/modbus';
 
 interface StationItemProps {
   station: FlatStation;

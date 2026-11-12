@@ -21,8 +21,8 @@ export function useModbusConfig() {
     try {
       const normalized = await configApi.fetchConfig();
       setState(normalized);
-      const firstStation = Object.keys(normalized.stations)[0] || null;
-      setSelectedStationUid((prev) => (prev && normalized.stations[prev] ? prev : firstStation));
+      const [firstStation] = Object.keys(normalized.stations);
+      setSelectedStationUid((prev) => (prev && normalized.stations[prev] ? prev : firstStation || null));
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Klaida kraunant duomenis');
     }

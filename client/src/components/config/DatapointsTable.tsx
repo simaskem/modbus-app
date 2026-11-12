@@ -1,11 +1,11 @@
 import { useMemo, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { useSelection } from '../hooks/useSelection';
-import { FlatDatapoint, FlatStation, RawDatapoint } from '../types/modbus';
+import { useSelection } from '../../hooks/useSelection';
+import { FlatDatapoint, FlatStation, RawDatapoint } from '../../types/modbus';
 import { AddRegisterModal } from './AddRegisterModal';
 import { BulkDatapointBar } from './BulkDatapointBar';
 import { DatapointRow } from './DatapointRow';
-import { Button } from './ui/Button';
+import { Button } from '../ui/Button';
 
 interface DatapointsTableProps {
   station: FlatStation | null;

@@ -1,12 +1,15 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { useModbusConfig } from './hooks/useModbusConfig';
 import { denormalizeConfig } from './utils/configTransformer';
-import { ChannelSettingsModal } from './components/ChannelSettingsModal';
-import { DatapointsTable } from './components/DatapointsTable';
-import { Sidebar } from './components/Sidebar';
+import { ChannelSettingsModal } from './components/config/ChannelSettingsModal';
+import { DatapointsTable } from './components/config/DatapointsTable';
+import { MonitoringDashboard } from './components/monitoring/MonitoringDashboard';
+import { Sidebar } from './components/config/Sidebar';
 import { Button } from './components/ui/Button';
 
 export function App() {
+  const [activeTab, setActiveTab] = useState<'config' | 'monitoring'>('config');
+
   const {
     state,
     error,
@@ -65,44 +68,69 @@ export function App() {
   return (
     <div className="app-layout">
       <header className="app-header">
-        <h2 style={{ margin: 0, fontSize: '16px' }}>Modbus Device Configurator</h2>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".json"
-            style={{ display: 'none' }}
-            onChange={handleImportFile}
-          />
-          <Button onClick={() => fileInputRef.current?.click()}>Import JSON</Button>
-          <Button onClick={handleExportJson}>Export JSON</Button>
-          <Button variant="success" onClick={saveConfig} disabled={isSaving}>
-            {isSaving ? 'Saugoma...' : 'Save Configuration'}
-          </Button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <h2 style={{ margin: 0, fontSize: '16px' }}>Modbus Gateway</h2>
+          <div style={{ display: 'flex', gap: '4px' }}>
+            <Button
+              variant={activeTab === 'config' ? 'primary' : 'default'}
+              onClick={() => setActiveTab('config')}
+            >
+              Configuration
+            </Button>
+            <Button
+              variant={activeTab === 'monitoring' ? 'primary' : 'default'}
+              onClick={() => setActiveTab('monitoring')}
+            >
+              Monitoring Dashboard
+            </Button>
+          </div>
         </div>
+
+        {activeTab === 'config' && (
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".json"
+              style={{ display: 'none' }}
+              onChange={handleImportFile}
+            />
+            <Button onClick={() => fileInputRef.current?.click()}>Import JSON</Button>
+            <Button onClick={handleExportJson}>Export JSON</Button>
+            <Button variant="success" onClick={saveConfig} disabled={isSaving}>
+              {isSaving ? 'Saugoma...' : 'Save Configuration'}
+            </Button>
+          </div>
+        )}
       </header>
 
       <div className="app-body">
-        <Sidebar
-          channels={state.channels}
-          stations={state.stations}
-          selectedStationUid={selectedStationUid}
-          onSelectStation={setSelectedStationUid}
-          onEditChannel={setEditingChannelUid}
-          onAddDevice={addDevice}
-          onDeleteDevice={deleteDevice}
-          onMoveStations={moveStations}
-        />
+        {activeTab === 'config' ? (
+          <>
+            <Sidebar
+              channels={state.channels}
+              stations={state.stations}
+              selectedStationUid={selectedStationUid}
+              onSelectStation={setSelectedStationUid}
+              onEditChannel={setEditingChannelUid}
+              onAddDevice={addDevice}
+              onDeleteDevice={deleteDevice}
+              onMoveStations={moveStations}
+            />
 
-        <DatapointsTable
-          station={activeStation}
-          stations={state.stations}
-          datapoints={state.datapoints}
-          onAddRegister={addRegister}
-          onCopyDatapointsToStation={copyDatapointsToStation}
-          onBulkUpdateDatapoints={bulkUpdateDatapoints}
-          onBulkDeleteDatapoints={bulkDeleteDatapoints}
-        />
+            <DatapointsTable
+              station={activeStation}
+              stations={state.stations}
+              datapoints={state.datapoints}
+              onAddRegister={addRegister}
+              onCopyDatapointsToStation={copyDatapointsToStation}
+              onBulkUpdateDatapoints={bulkUpdateDatapoints}
+              onBulkDeleteDatapoints={bulkDeleteDatapoints}
+            />
+          </>
+        ) : (
+          <MonitoringDashboard state={state} isActive={activeTab === 'monitoring'} />
+        )}
       </div>
 
       {editingChannel && (
