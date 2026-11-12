@@ -23,12 +23,10 @@ app.use(express.json({ limit: '5mb' }));
 const serverRoot = path.basename(__dirname) === 'dist' ? path.resolve(__dirname, '..') : __dirname;
 const store = new ConfigStore(path.join(serverRoot, 'modbus_config.json'));
 
-// Prijungiame išskaidytus maršrutus
 app.use('/api/config', createConfigRoutes(store));
 app.use('/api/channels', createChannelRoutes(store));
 app.use('/api/registers', createRegisterRoutes(store));
 
-// Produkcijos režime atiduodame sukompiliuotą React aplikaciją
 if (process.env.NODE_ENV === 'production') {
   const clientDistPath = path.join(__dirname, '../../client/dist');
   app.use(express.static(clientDistPath));
@@ -37,7 +35,6 @@ if (process.env.NODE_ENV === 'production') {
   });
 }
 
-// Bendras HTTP ir WebSocket serveris ant to paties prievado
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server, path: '/ws' });
 setupMonitoringWebSocket(wss, store);
@@ -45,3 +42,13 @@ setupMonitoringWebSocket(wss, store);
 server.listen(PORT, () => {
   logger.info(`Server & WebSocket running on http://localhost:${PORT}`);
 });
+
+// Saugus serverio sustabdymas: prieš išjungiant įrašome atidėtus pakeitimus į diską
+const handleShutdown = async () => {
+  logger.info('Shutting down server, flushing pending config changes...');
+  await store.flushToDisk();
+  process.exit(0);
+};
+
+process.on('SIGINT', handleShutdown);
+process.on('SIGTERM', handleShutdown);
