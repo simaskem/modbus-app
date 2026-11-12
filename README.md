@@ -48,16 +48,29 @@ Aplikacija sukurta taip, kad sklandžiai veiktų embedded Linux įrenginiuose su
 - `./client/dist ~276 KB (su gzip apie 85–90 KB)`
 
 
-## Registrų susiejimo eiga
-- Master-Detail išdėstymas ir paieška: Ekranas padalintas į dvi dalis – kairėje valdomi kanalai (su ALL / TCP / RTU filtru) ir įrenginiai, o dešinėje – pasirinkto įrenginio (arba visų įrenginių vienu metu) registrų lentelė su greita paieška.
-- Įrenginių perkėlimas tarp kanalų: Pažymėtus įrenginius galima vienu veiksmu perkelti į kitą kanalą kartu su visais jiems priskirtais registrais.
-- Masiniai veiksmai (Bulk Actions): Didelis dėmesys rankinio darbo mažinimui – galima vienu metu pakeisti pažymėtų registrų parametrus (acq_cycle, func_code, byte_order), juos ištrinti arba nukopijuoti į naujai sukurtą įrenginį (su automatiniu nuoseklių ID pergeneravimu).
-- Importas ir eksportas: Palaikomas pilnos konfigūracijos eksportavimas ir validuotas importavimas JSON formatu.
+## Registrų susiejimo eiga (Register Mapping Workflow)
 
-## Pramoninis patogumas
-- Kategorizuotas monitoringas: Duomenys suskirstyti į 6 inžinerines kategorijas (Volts, Amps, kW, kVA, kVAr, Energy). Neaktyvūs kanalai išfiltruojami, o kategorijos be aktyvių registrų automatiškai išjungiamos su paaiškinančiu tooltip.
-- Multi-registrų palyginimas ir skalių apsauga: Viename grafike leidžiama lyginti iki 6 registrų iš skirtingų įrenginių, o ilgi pavadinimai automatiškai sutrumpinami. Griežtas filtravimas neleidžia ant bendros Y ašies maišyti skirtingų matavimo vienetų ar skalių (pvz., Volts ir Amps arba kW ir kVAr).
-- Momentiniai pradiniai duomenys: Pradinės reikšmės atsiunčiamos akimirksniu, o ilgiems nuskaitymo ciklams (pvz., Energy su 1 valandos ciklu) taikomas pagreitintas simuliacijos intervalas kas 10 sek., kad inžinieriui nereikėtų laukti valandos.
+- Duomenų nuskaitymas ir suplokštinimas (Normalization): Serveris vieną kartą nuskaito medžio struktūros `modbus_config.json` į RAM podėlį ir atiduoda per `GET /api/config`. Kliento pusėje medžio struktūra (`Kanalas -> Stotis -> Registrai`) iškart transformuojama į plokščią būseną (Normalized State), susiejant kiekvieną registrą su stotimi per unikalius vidinius ID. Tai leidžia akimirksniu (`O(1)`) surasti, filtruoti ir atnaujinti registrus.
+- Master-Detail išdėstymas ir virtualizacija: Ekranas padalintas į dvi zonas – kairėje valdomi kanalai (su `ALL` / `TCP` / `RTU` filtru) ir įrenginiai, o dešinėje rodoma pasirinkto įrenginio (arba visų įrenginių vienu metu) registrų lentelė. Dideliems registrų kiekiams atvaizduoti naudojama DOM virtualizacija (`@tanstack/react-virtual`) ir `React.memo`, todėl naršyklėje renderinamos tik tuo metu ekrane matomos eilutės (`~20`).
+- Registrų valdymo būdai:
+  - Individualus kūrimas: Galima pridėti naują registrą pasirinktai stočiai (su automatiniu `reg_size` parinkimu pagal duomenų tipą ir nuosekliu ID suteikimu).
+  - Greita paieška ir filtravimas: Akimirksniu filtruojama pagal registro aprašymą, pradinį adresą (`start_addr`) arba funkcijos kodą (`func_code`).
+  - Masiniai veiksmai (Bulk Actions): Pažymėjus kelis registrus, galima vienu paspaudimu pakeisti jų parametrus (`acq_cycle`, `func_code`, `byte_order`), juos masiškai ištrinti arba nukopijuoti į naujai sukurtą įrenginį.
+  - Įrenginių perkėlimas tarp kanalų: Perkeliant stotis į kitą kanalą, visi joms priskirti registrai keliauja kartu automatiškai, keičiant tik stoties nuorodą į kanalą.
+  - Importas ir eksportas: Palaikomas pilnos konfigūracijos eksportavimas ir validuotas importavimas JSON formatu.
+- Validacija ir atominis įrašymas atgal: Kiekvienas registrų pakeitimas tikrinamas pagal Modbus taisykles (adresų persidengimas tame pačiame funkcijos kode, `0–65535` ribos, `scale != 0`). Prieš išsaugant, plokščia būsena vėl sulipdoma į pradinį medžio JSON formatą (Denormalization) ir serveryje atomiškai įrašoma į diską per `.tmp` failą bei `fs.rename`.
+- Realaus laiko registrų stebėjimas (Monitoring): Pasirinkus registrus Monitoring skiltyje, naudojama lengva `ws` (WebSocket) biblioteka su prenumeratos modeliu (On-Demand). Serveris viename `250 ms` cikle tikrina tik prenumeruotus registrus pagal jų `acq_cycle` ir siunčia pakeitimus paketais (Batching), o klientas juos atvaizduoja HTML5 Canvas grafike (`uPlot`) su laiko langu ribotu duomenų buferiu (Ring Buffer).
+
+
+## Pramoninis patogumas (Industrial Usability)
+
+- Centralizuotas valdymas vietoj rankinio failų redagavimo: Inžinieriui nebereikia jungtis prie įrenginio per SSH ir ranka taisyti sudėtingo JSON failo – vienoje sąsajoje jis gali valdyti visus TCP ir RTU ryšio kanalus, keisti jų parametrus (IP, prievadus, `baudrate`), kurti ar šalinti įrenginius bei jų registrus.
+- Apsauga nuo gamybinių klaidų (Fail-Safe Validation): Dirbant su daugeliu įrenginių lengva suklysti, todėl sistema aktyviai blokuoja kritines Modbus klaidas – registrų adresų persidengimus, dubliuotus RTU stoties (Slave) adresus (`1–247`), dalybą iš nulio (`scale != 0`) bei neatitinkančius `reg_size` dydžius tiek naršyklėje, tiek serveryje.
+- Greitas diegimas ir masiniai veiksmai: Prijungus naują tokio paties tipo skaitiklį ar daviklį, inžinieriui nereikia iš naujo suvedinėti dešimčių registrų – juos galima vienu paspaudimu nukopijuoti iš esamo įrenginio (su automatiniu ID pergeneravimu), masiškai keisti jų nuskaitymo ciklus ar perkelti visus įrenginius tarp kanalų.
+- Kategorizuotas monitoringas ir triukšmo mažinimas: Duomenys suskirstyti į 6 inžinerines kategorijas (`Volts`, `Amps`, `kW`, `kVA`, `kVAr`, `Energy`). Neaktyvūs kanalai (`enable: false`) automatiškai išfiltruojami, o kategorijos be aktyvių registrų išjungiamos su paaiškinančiu `tooltip`, kad inžinierius matytų tik realiai veikiančią įrangą.
+- Skirtingų įrenginių palyginimas viename grafike: Viename grafike leidžiama lyginti iki 6 registrų iš skirtingų įrenginių (pvz., patikrinti fazių apkrovas ar įtampos kritimus tarp kelių skaitiklių), o ilgi pavadinimai automatiškai sutrumpinami. Griežtas filtravimas neleidžia ant bendros Y ašies maišyti skirtingų matavimo vienetų ar skalių (pvz., `Volts` ir `Amps` arba `kW` ir `kVAr`).
+- Momentinė diagnostika vietoje: Pradinės reikšmės atsiunčiamos akimirksniu, o ilgiems nuskaitymo ciklams (pvz., `Energy` su 1 valandos ciklu) taikomas pagreitintas simuliacijos intervalas kas `10 sek.`, kad inžinierius objekte galėtų iškart įsitikinti, jog ryšys su įrenginiu veikia, nelaukdamas valandos.
+
 
 ## Resursų taupymas įrenginyje (Embedded Constraints)
 
@@ -77,4 +90,6 @@ Aplikacija sukurta taip, kad sklandžiai veiktų embedded Linux įrenginiuose su
 - Serverio atminties podėlis (RAM Cache): Konfigūracijos failas iš disko nuskaitomas tik vieną kartą starto metu, o visos `GET` užklausos aptarnaujamos iš RAM, taip tausojant Flash atminties skaitymo operacijas.
 - Atominis failų įrašymas: Išsaugant pakeitimus, duomenys pirmiausia įrašomi į laikiną `.tmp` failą ir tik tada atomiškai pervadinami (`fs.rename`), apsaugant konfigūraciją nuo sugadinimo dingus elektrai.
 - Atskirtos kūrimo priklausomybės (`devDependencies`): Kompiliavimo įrankiai (`TypeScript`, `Vite`) atskirti į `devDependencies`, todėl įrenginyje su `npm ci --omit=dev` įrašomi tik būtini vykdymo (`runtime`) paketai.
+- Atidėtas ir atominis įrašymas į Flash (Debounced Atomic Write): Serveris nuolat laiko konfigūraciją RAM podėlyje, o fizinį įrašymą į diską atideda 2 sekundėms (Debounce) ir atlieka per .tmp failą bei fs.rename (su priverstiniu išsaugojimu stabdant serverį). Tai sumažina Flash atminties rašymo ciklus ir apsaugo failą nuo sugadinimo dingus maitinimui.
+
 
