@@ -60,6 +60,21 @@ Aplikacija sukurta taip, kad sklandžiai veiktų embedded Linux įrenginiuose su
 - Momentiniai pradiniai duomenys: Pradinės reikšmės atsiunčiamos akimirksniu, o ilgiems nuskaitymo ciklams (pvz., Energy su 1 valandos ciklu) taikomas pagreitintas simuliacijos intervalas kas 10 sek., kad inžinieriui nereikėtų laukti valandos.
 
 ## Resursų taupymas įrenginyje (Embedded Constraints)
-- DOM virtualizacija: Naudojant @tanstack/react-virtual (~3 KB), DOM medyje renderinamos tik matomos eilutės (~20), todėl net tūkstančiai registrų lentelėje veikia itin sklandžiai.
-- On-Demand WebSocket valdymas: Ryšys ir fono simuliacijos veikia tik atidarius Dashboard rodinį ir pažymėjus bent vieną registrą – išėjus ar nužymėjus viskas automatiškai uždaroma, taupant CPU ir tinklą.
-- Optimizuoti grafikai: Vietoj sunkių SVG/DOM bibliotekų naudojama uPlot (~35 KB, HTML5 Canvas). Kartu su Ring Buffer ji neleidžia išsipūsti naršyklės RAM ilgalaikio stebėjimo metu.
+
+### 1. RAM (operatyviosios atminties) taupymas
+- Vieno proceso architektūra: Produkcijoje `express` tiesiogiai atiduoda sukompiliuotus failus iš `client/dist`, todėl įrenginyje sukasi tik vienas `node` procesas (be papildomo `Nginx` ar atskiro frontend serverio).
+- Ribotas laiko lango buferis (Ring Buffer): Kliento pusėje istoriniai duomenys griežtai apkarpomi pagal pasirinktą langą (`1`, `3`, `5` arba `10` min.), o uždarius stebėjimo langą ar atžymėjus registrą – išvalomi iš atminties.
+- Minimalus priklausomybių pėdsakas: Vietoj sunkių UI ar schemų bibliotekų (`MUI`, `Recharts`, `Zod`) naudojamas švarus CSS, lengvas `uPlot` (`~35 KB`) ir `@tanstack/react-virtual` (`~3 KB`).
+- Be išorinės duomenų bazės: Konfigūracija laikoma JSON faile ir serverio RAM podėlyje.
+
+### 2. CPU (procesoriaus) taupymas
+- On-Demand WebSocket ir simuliacija: WebSocket ryšys ir serverio simuliacijos ciklas veikia tik tada, kai vartotojas stebi bent vieną registrą. Kai niekas nestebi, CPU apkrova yra `0 %`.
+- Bendras ciklas ir duomenų grupavimas (Batching): Užuot kūrus atskirus laikmačius kiekvienam registrui, serveryje sukasi vienas bendras `250 ms` ciklas, kuris siunčia tik tuo metu atsinaujinusių ir prenumeruotų registrų paketą.
+- DOM virtualizacija ir `React.memo`: Sąrašuose `@tanstack/react-virtual` atvaizduoja tik ekrane matomas eilutes (`~20`), o plokščia būsena (`O(1)` paieška) su `React.memo` neleidžia perpiešti visos sąsajos atsinaujinus vienam registrui.
+- HTML5 Canvas grafikai: `uPlot` piešia ant `<canvas>` ir atnaujina reikšmes per `setData` neperkurdamas grafiko objekto.
+
+### 3. Flash atminties (disko vietos ir rašymo ciklų) taupymas
+- Serverio atminties podėlis (RAM Cache): Konfigūracijos failas iš disko nuskaitomas tik vieną kartą starto metu, o visos `GET` užklausos aptarnaujamos iš RAM, taip tausojant Flash atminties skaitymo operacijas.
+- Atominis failų įrašymas: Išsaugant pakeitimus, duomenys pirmiausia įrašomi į laikiną `.tmp` failą ir tik tada atomiškai pervadinami (`fs.rename`), apsaugant konfigūraciją nuo sugadinimo dingus elektrai.
+- Atskirtos kūrimo priklausomybės (`devDependencies`): Kompiliavimo įrankiai (`TypeScript`, `Vite`) atskirti į `devDependencies`, todėl įrenginyje su `npm ci --omit=dev` įrašomi tik būtini vykdymo (`runtime`) paketai.
+
